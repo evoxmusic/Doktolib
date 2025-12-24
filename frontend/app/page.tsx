@@ -63,8 +63,8 @@ export default function Home() {
     loadInitialDoctors()
   }, [])
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSearch = (event: React.FormEvent) => {
+    event.preventDefault()
     fetchDoctors()
   }
 
@@ -73,9 +73,9 @@ export default function Home() {
     const fullStars = Math.floor(rating)
     const hasHalfStar = rating % 1 !== 0
 
-    for (let i = 0; i < fullStars; i++) {
+    for (let starIndex = 0; starIndex < fullStars; starIndex++) {
       stars.push(
-        <StarSolidIcon key={i} className="h-4 w-4 text-yellow-400" />
+        <StarSolidIcon key={starIndex} className="h-4 w-4 text-yellow-400" />
       )
     }
     
@@ -86,9 +86,9 @@ export default function Home() {
     }
     
     const emptyStars = 5 - Math.ceil(rating)
-    for (let i = 0; i < emptyStars; i++) {
+    for (let emptyStarIndex = 0; emptyStarIndex < emptyStars; emptyStarIndex++) {
       stars.push(
-        <StarIcon key={`empty-${i}`} className="h-4 w-4 text-gray-300" />
+        <StarIcon key={`empty-${emptyStarIndex}`} className="h-4 w-4 text-gray-300" />
       )
     }
     
@@ -139,7 +139,7 @@ export default function Home() {
                     <select
                       className="input-field pl-10 pr-10 appearance-none"
                       value={searchSpecialty}
-                      onChange={(e) => setSearchSpecialty(e.target.value)}
+                      onChange={(event) => setSearchSpecialty(event.target.value)}
                     >
                       <option value="">All specialties</option>
                       {specialties.map((specialty) => (
@@ -155,7 +155,7 @@ export default function Home() {
                     <select
                       className="input-field pl-10 pr-10 appearance-none"
                       value={searchLocation}
-                      onChange={(e) => setSearchLocation(e.target.value)}
+                      onChange={(event) => setSearchLocation(event.target.value)}
                     >
                       <option value="">All locations</option>
                       {cities.map((city) => (
@@ -184,8 +184,8 @@ export default function Home() {
           
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {[...Array(6)].map((_, i) => (
-                <div key={i} className="card animate-pulse">
+              {[...Array(6)].map((_, skeletonIndex) => (
+                <div key={skeletonIndex} className="card animate-pulse">
                   <div className="flex items-start space-x-4">
                     <div className="w-16 h-16 bg-gray-200 rounded-full"></div>
                     <div className="flex-1 space-y-2">

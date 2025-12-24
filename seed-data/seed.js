@@ -39,14 +39,14 @@ function getSSLConfig() {
 async function connectToDatabase(retries = 10) {
   const sslConfig = getSSLConfig();
   
-  for (let i = 0; i < retries; i++) {
+  for (let batchIndex = 0; batchIndex < retries; batchIndex++) {
     const client = new Client({
       connectionString: process.env.DATABASE_URL,
       ssl: sslConfig
     });
 
     try {
-      console.log(`🔌 Attempting to connect to database (attempt ${i + 1}/${retries})...`);
+      console.log(`🔌 Attempting to connect to database (attempt ${batchIndex + 1}/${retries})...`);
       await client.connect();
       console.log('✅ Connected to database successfully');
       return client;
@@ -54,7 +54,7 @@ async function connectToDatabase(retries = 10) {
       console.log(`❌ Connection failed: ${error.message}`);
       await client.end().catch(() => {}); // Cleanup failed connection
       
-      if (i === retries - 1) {
+      if (batchIndex === retries - 1) {
         throw error;
       }
       console.log(`⏳ Retrying in 5 seconds...`);
@@ -173,8 +173,8 @@ async function seedDatabase(client, force = false) {
     
     const insertedDoctors = []; // Keep track of inserted doctors with their IDs
     
-    for (let i = 0; i < doctors.length; i += batchSize) {
-      const batch = doctors.slice(i, i + batchSize);
+    for (let batchIndex = 0; batchIndex < doctors.length; batchIndex += batchSize) {
+      const batch = doctors.slice(batchIndex, batchIndex + batchSize);
       
       const values = batch.map((doctor, index) => {
         const baseIndex = index * 8;
@@ -214,8 +214,8 @@ async function seedDatabase(client, force = false) {
     console.log(`💉 Inserting ${appointments.length} appointments into database...`);
     const insertedAppointments = [];
     
-    for (let i = 0; i < appointments.length; i += batchSize) {
-      const batch = appointments.slice(i, i + batchSize);
+    for (let batchIndex = 0; batchIndex < appointments.length; batchIndex += batchSize) {
+      const batch = appointments.slice(batchIndex, batchIndex + batchSize);
       
       const values = batch.map((appointment, index) => {
         const baseIndex = index * 6;
@@ -246,7 +246,7 @@ async function seedDatabase(client, force = false) {
         });
       });
       
-      console.log(`   📅 Inserted ${Math.min((i + 1) * batchSize, appointments.length)}/${appointments.length} appointments...`);
+      console.log(`   📅 Inserted ${Math.min((batchIndex + 1) * batchSize, appointments.length)}/${appointments.length} appointments...`);
     }
     
     // Generate and insert prescriptions for completed appointments
@@ -256,8 +256,8 @@ async function seedDatabase(client, force = false) {
     if (prescriptions.length > 0) {
       console.log(`💉 Inserting ${prescriptions.length} prescriptions into database...`);
       
-      for (let i = 0; i < prescriptions.length; i += batchSize) {
-        const batch = prescriptions.slice(i, i + batchSize);
+      for (let batchIndex = 0; batchIndex < prescriptions.length; batchIndex += batchSize) {
+        const batch = prescriptions.slice(batchIndex, batchIndex + batchSize);
         
         const values = batch.map((prescription, index) => {
           const baseIndex = index * 6;
@@ -279,7 +279,7 @@ async function seedDatabase(client, force = false) {
         `;
         
         await client.query(query, params);
-        console.log(`   💊 Inserted ${Math.min((i + 1) * batchSize, prescriptions.length)}/${prescriptions.length} prescriptions...`);
+        console.log(`   💊 Inserted ${Math.min((batchIndex + 1) * batchSize, prescriptions.length)}/${prescriptions.length} prescriptions...`);
       }
     } else {
       console.log(`   ℹ️ No completed appointments found, skipping prescription generation.`);
@@ -306,25 +306,25 @@ async function seedDatabase(client, force = false) {
         (SELECT COUNT(*) FROM prescriptions) as total_prescriptions
     `);
     
-    const row = stats.rows[0];
+    const statsRow = stats.rows[0];
     console.log(`\n📊 Seeding completed successfully!`);
     console.log(`\n👨‍⚕️ Doctor Statistics:`);
-    console.log(`- Total doctors: ${row.total_doctors}`);
-    console.log(`- Specialties: ${row.specialties_count}`);
-    console.log(`- Locations: ${row.locations_count}`);
-    console.log(`- Average rating: ${row.avg_rating}`);
-    console.log(`- Average price: $${row.avg_price}`);
-    console.log(`- Average experience: ${row.avg_experience} years`);
+    console.log(`- Total doctors: ${statsRow.total_doctors}`);
+    console.log(`- Specialties: ${statsRow.specialties_count}`);
+    console.log(`- Locations: ${statsRow.locations_count}`);
+    console.log(`- Average rating: ${statsRow.avg_rating}`);
+    console.log(`- Average price: $${statsRow.avg_price}`);
+    console.log(`- Average experience: ${statsRow.avg_experience} years`);
     
     console.log(`\n📅 Appointment Statistics:`);
-    console.log(`- Total appointments: ${row.total_appointments}`);
-    console.log(`- Completed: ${row.completed_appointments}`);
-    console.log(`- Confirmed (upcoming): ${row.confirmed_appointments}`);
-    console.log(`- Cancelled: ${row.cancelled_appointments}`);
+    console.log(`- Total appointments: ${statsRow.total_appointments}`);
+    console.log(`- Completed: ${statsRow.completed_appointments}`);
+    console.log(`- Confirmed (upcoming): ${statsRow.confirmed_appointments}`);
+    console.log(`- Cancelled: ${statsRow.cancelled_appointments}`);
     
     console.log(`\n💊 Prescription Statistics:`);
-    console.log(`- Total prescriptions: ${row.total_prescriptions}`);
-    console.log(`- Prescription rate: ${row.completed_appointments > 0 ? Math.round((row.total_prescriptions / row.completed_appointments) * 100) : 0}% of completed appointments`);
+    console.log(`- Total prescriptions: ${statsRow.total_prescriptions}`);
+    console.log(`- Prescription rate: ${statsRow.completed_appointments > 0 ? Math.round((row.total_prescriptions / row.completed_appointments) * 100) : 0}% of completed appointments`);
     
   } catch (error) {
     console.error('❌ Error during seeding:', error);
