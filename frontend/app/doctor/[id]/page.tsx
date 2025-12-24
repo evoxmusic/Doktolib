@@ -80,16 +80,16 @@ export default function DoctorDetail() {
     const stars = []
     const fullStars = Math.floor(rating)
     
-    for (let i = 0; i < fullStars; i++) {
+    for (let starIndex = 0; starIndex < fullStars; starIndex++) {
       stars.push(
-        <StarSolidIcon key={i} className="h-5 w-5 text-yellow-400" />
+        <StarSolidIcon key={starIndex} className="h-5 w-5 text-yellow-400" />
       )
     }
     
     const emptyStars = 5 - fullStars
-    for (let i = 0; i < emptyStars; i++) {
+    for (let emptyStarIndex = 0; emptyStarIndex < emptyStars; emptyStarIndex++) {
       stars.push(
-        <StarIcon key={`empty-${i}`} className="h-5 w-5 text-gray-300" />
+        <StarIcon key={`empty-${emptyStarIndex}`} className="h-5 w-5 text-gray-300" />
       )
     }
     
@@ -111,8 +111,8 @@ export default function DoctorDetail() {
     const dates = []
     const today = startOfToday()
     
-    for (let i = 1; i <= 14; i++) {
-      const date = addDays(today, i)
+    for (let dayOffset = 1; dayOffset <= 14; dayOffset++) {
+      const date = addDays(today, dayOffset)
       dates.push(date)
     }
     
@@ -130,8 +130,8 @@ export default function DoctorDetail() {
     })
   }
 
-  const handleBookingSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBookingSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
     
     if (!selectedDate || !selectedTime || !bookingForm.patient_name || !bookingForm.patient_email) {
       toast.error('Please fill in all fields')
@@ -314,7 +314,7 @@ export default function DoctorDetail() {
                           required
                           className="input-field"
                           value={bookingForm.patient_name}
-                          onChange={(e) => setBookingForm({...bookingForm, patient_name: e.target.value})}
+                          onChange={(event) => setBookingForm({...bookingForm, patient_name: event.target.value})}
                         />
                       </div>
                       
@@ -328,7 +328,7 @@ export default function DoctorDetail() {
                           required
                           className="input-field"
                           value={bookingForm.patient_email}
-                          onChange={(e) => setBookingForm({...bookingForm, patient_email: e.target.value})}
+                          onChange={(event) => setBookingForm({...bookingForm, patient_email: event.target.value})}
                         />
                       </div>
                       
@@ -340,7 +340,7 @@ export default function DoctorDetail() {
                           id="duration"
                           className="input-field"
                           value={bookingForm.duration_minutes}
-                          onChange={(e) => setBookingForm({...bookingForm, duration_minutes: parseInt(e.target.value)})}
+                          onChange={(event) => setBookingForm({...bookingForm, duration_minutes: parseInt(event.target.value)})}
                         >
                           <option value={30}>30 minutes</option>
                           <option value={60}>1 hour</option>

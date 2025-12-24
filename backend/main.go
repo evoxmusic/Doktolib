@@ -110,8 +110,8 @@ type FileUploadResponse struct {
 	Message    string `json:"message"`
 }
 
-var db *sql.DB
-var s3Client *s3.Client
+var databaseConnection *sql.DB
+var s3StorageClient *s3.Client
 
 func initDB() {
 	var err error
@@ -127,12 +127,12 @@ func initDB() {
 
 	log.Printf("Connecting to database with URL: %s", maskPassword(databaseURL))
 
-	db, err = sql.Open("postgres", databaseURL)
+	databaseConnection, err = sql.Open("postgres", databaseURL)
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
-	if err = db.Ping(); err != nil {
+	if err = databaseConnection.Ping(); err != nil {
 		log.Fatal("Failed to ping database:", err)
 	}
 
@@ -153,7 +153,7 @@ func initS3() {
 		return
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.TODO(),
+	awsConfig, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(awsRegion),
 		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
 			awsAccessKeyID,
@@ -167,7 +167,7 @@ func initS3() {
 		return
 	}
 
-	s3Client = s3.NewFromConfig(cfg)
+	s3StorageClient = s3.NewFromConfig(awsConfig)
 	log.Printf("Successfully initialized S3 client for region: %s", awsRegion)
 }
 
@@ -179,35 +179,35 @@ func configureSSLMode(databaseURL string) string {
 	}
 
 	// Parse the URL
-	u, err := url.Parse(databaseURL)
+	parsedURL, err := url.Parse(databaseURL)
 	if err != nil {
 		log.Printf("Warning: Could not parse DATABASE_URL, using as-is: %v", err)
 		return databaseURL
 	}
 
 	// Get existing query parameters
-	query := u.Query()
+	queryParams := parsedURL.Query()
 	
 	// Set or update sslmode
-	query.Set("sslmode", sslMode)
+	queryParams.Set("sslmode", sslMode)
 	
 	// Add additional SSL parameters if needed
 	if sslMode != "disable" {
 		// Set SSL cert configuration if provided
 		if sslCert := os.Getenv("DB_SSL_CERT"); sslCert != "" {
-			query.Set("sslcert", sslCert)
+			queryParams.Set("sslcert", sslCert)
 		}
 		if sslKey := os.Getenv("DB_SSL_KEY"); sslKey != "" {
-			query.Set("sslkey", sslKey)
+			queryParams.Set("sslkey", sslKey)
 		}
 		if sslRootCert := os.Getenv("DB_SSL_ROOT_CERT"); sslRootCert != "" {
-			query.Set("sslrootcert", sslRootCert)
+			queryParams.Set("sslrootcert", sslRootCert)
 		}
 	}
 
 	// Rebuild the URL
-	u.RawQuery = query.Encode()
-	return u.String()
+	parsedURL.RawQuery = queryParams.Encode()
+	return parsedURL.String()
 }
 
 func validateFileType(fileName string) (string, bool) {
@@ -247,7 +247,7 @@ func categorizeFile(fileName string) string {
 }
 
 func uploadFileToS3(file multipart.File, fileName string, contentType string, patientID string, category string) (string, error) {
-	if s3Client == nil {
+	if s3StorageClient == nil {
 		return "", fmt.Errorf("S3 client not initialized")
 	}
 
@@ -268,7 +268,7 @@ func uploadFileToS3(file multipart.File, fileName string, contentType string, pa
 	}
 
 	// Upload to S3
-	_, err = s3Client.PutObject(context.TODO(), &s3.PutObjectInput{
+	_, err = s3StorageClient.PutObject(context.TODO(), &s3.PutObjectInput{
 		Bucket:        aws.String(bucketName),
 		Key:           aws.String(s3Key),
 		Body:          bytes.NewReader(fileBytes),
@@ -290,7 +290,7 @@ func uploadFileToS3(file multipart.File, fileName string, contentType string, pa
 }
 
 func generatePresignedURL(s3Key string, expiration time.Duration) (string, error) {
-	if s3Client == nil {
+	if s3StorageClient == nil {
 		return "", fmt.Errorf("S3 client not initialized")
 	}
 
@@ -299,7 +299,7 @@ func generatePresignedURL(s3Key string, expiration time.Duration) (string, error
 		return "", fmt.Errorf("AWS_S3_BUCKET environment variable not set")
 	}
 
-	presignClient := s3.NewPresignClient(s3Client)
+	presignClient := s3.NewPresignClient(s3StorageClient)
 	request, err := presignClient.PresignGetObject(context.TODO(), &s3.GetObjectInput{
 		Bucket: aws.String(bucketName),
 		Key:    aws.String(s3Key),
@@ -316,18 +316,18 @@ func generatePresignedURL(s3Key string, expiration time.Duration) (string, error
 
 // maskPassword hides the password in database URL for logging
 func maskPassword(databaseURL string) string {
-	u, err := url.Parse(databaseURL)
+	parsedURL, err := url.Parse(databaseURL)
 	if err != nil {
 		return databaseURL
 	}
 	
-	if u.User != nil && u.User.Username() != "" {
-		if _, hasPassword := u.User.Password(); hasPassword {
-			u.User = url.UserPassword(u.User.Username(), "***")
+	if parsedURL.User != nil && parsedURL.User.Username() != "" {
+		if _, hasPassword := parsedURL.User.Password(); hasPassword {
+			parsedURL.User = url.UserPassword(parsedURL.User.Username(), "***")
 		}
 	}
 	
-	return u.String()
+	return parsedURL.String()
 }
 
 func getDoctors(c *gin.Context) {
@@ -356,7 +356,7 @@ func getDoctors(c *gin.Context) {
 
 	query += " ORDER BY rating DESC, name ASC"
 
-	rows, err := db.Query(query, args...)
+	rows, err := databaseConnection.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch doctors"})
 		return
@@ -391,7 +391,7 @@ func getDoctorByID(c *gin.Context) {
 	`
 
 	var doctor Doctor
-	err := db.QueryRow(query, id).Scan(
+	err := databaseConnection.QueryRow(query, id).Scan(
 		&doctor.ID, &doctor.Name, &doctor.Specialty, &doctor.Location,
 		&doctor.Rating, &doctor.PricePerHour, &doctor.Avatar,
 		&doctor.Experience, &doctor.Languages,
@@ -437,7 +437,7 @@ func createAppointment(c *gin.Context) {
 	`
 
 	var appointment Appointment
-	err = db.QueryRow(
+	err = databaseConnection.QueryRow(
 		query,
 		appointmentID,
 		req.DoctorID,
@@ -483,7 +483,7 @@ func getAppointments(c *gin.Context) {
 	
 	query += " ORDER BY a.date_time ASC"
 
-	rows, err := db.Query(query, args...)
+	rows, err := databaseConnection.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch appointments"})
 		return
@@ -546,13 +546,13 @@ func getDoctorAppointments(c *gin.Context) {
 	
 	switch filter {
 	case "past":
-		rows, err = db.Query(query, doctorID, today)
+		rows, err = databaseConnection.Query(query, doctorID, today)
 	case "today":
-		rows, err = db.Query(query, doctorID, today, tomorrow)
+		rows, err = databaseConnection.Query(query, doctorID, today, tomorrow)
 	case "future":
-		rows, err = db.Query(query, doctorID, tomorrow)
+		rows, err = databaseConnection.Query(query, doctorID, tomorrow)
 	default:
-		rows, err = db.Query(query[:len(query)-25]+" ORDER BY a.date_time DESC", doctorID) // Remove WHERE clause
+		rows, err = databaseConnection.Query(query[:len(query)-25]+" ORDER BY a.date_time DESC", doctorID) // Remove WHERE clause
 	}
 	
 	if err != nil {
@@ -619,7 +619,7 @@ func createPrescription(c *gin.Context) {
 
 	// Verify appointment exists and get doctor and patient info
 	var appointment Appointment
-	err := db.QueryRow(`
+	err := databaseConnection.QueryRow(`
 		SELECT id, doctor_id, patient_name, patient_email, date_time, duration_minutes, status, created_at
 		FROM appointments WHERE id = $1
 	`, req.AppointmentID).Scan(
@@ -647,7 +647,7 @@ func createPrescription(c *gin.Context) {
 	`
 
 	var prescription Prescription
-	err = db.QueryRow(
+	err = databaseConnection.QueryRow(
 		query,
 		prescriptionID,
 		req.AppointmentID,
@@ -705,7 +705,7 @@ func getDoctorPrescriptions(c *gin.Context) {
 	
 	query += " ORDER BY p.created_at DESC"
 	
-	rows, err := db.Query(query, args...)
+	rows, err := databaseConnection.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch prescriptions"})
 		return
@@ -802,7 +802,7 @@ func uploadMedicalFile(c *gin.Context) {
 	`
 
 	var medicalFile MedicalFile
-	err = db.QueryRow(
+	err = databaseConnection.QueryRow(
 		query,
 		fileID,
 		patientID,
@@ -871,7 +871,7 @@ func getMedicalFiles(c *gin.Context) {
 
 	query += " ORDER BY uploaded_at DESC"
 
-	rows, err := db.Query(query, args...)
+	rows, err := databaseConnection.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch medical files"})
 		return
@@ -916,7 +916,7 @@ func deleteMedicalFile(c *gin.Context) {
 
 	// Get file info from database first
 	var file MedicalFile
-	err := db.QueryRow(
+	err := databaseConnection.QueryRow(
 		"SELECT id, patient_id, patient_name, file_name, file_type, file_size, s3_key, category, uploaded_at FROM medical_files WHERE id = $1",
 		fileID,
 	).Scan(
@@ -942,10 +942,10 @@ func deleteMedicalFile(c *gin.Context) {
 	}
 
 	// Delete from S3
-	if s3Client != nil {
+	if s3StorageClient != nil {
 		bucketName := os.Getenv("AWS_S3_BUCKET")
 		if bucketName != "" {
-			_, err = s3Client.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
+			_, err = s3StorageClient.DeleteObject(context.TODO(), &s3.DeleteObjectInput{
 				Bucket: aws.String(bucketName),
 				Key:    aws.String(file.S3Key),
 			})
@@ -956,7 +956,7 @@ func deleteMedicalFile(c *gin.Context) {
 	}
 
 	// Delete from database
-	_, err = db.Exec("DELETE FROM medical_files WHERE id = $1", fileID)
+	_, err = databaseConnection.Exec("DELETE FROM medical_files WHERE id = $1", fileID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete file from database"})
 		return
@@ -980,19 +980,19 @@ func main() {
 	godotenv.Load()
 	
 	initDB()
-	defer db.Close()
+	defer databaseConnection.Close()
 
 	initS3()
 
 	gin.SetMode(gin.ReleaseMode)
-	r := gin.Default()
+	router := gin.Default()
 
-	config := cors.DefaultConfig()
-	config.AllowAllOrigins = true
-	config.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
-	r.Use(cors.New(config))
+	corsConfig := cors.DefaultConfig()
+	corsConfig.AllowAllOrigins = true
+	corsConfig.AllowHeaders = []string{"Origin", "Content-Length", "Content-Type", "Authorization"}
+	router.Use(cors.New(corsConfig))
 
-	api := r.Group("/api/v1")
+	api := router.Group("/api/v1")
 	{
 		api.GET("/health", healthCheck)
 		api.GET("/doctors", getDoctors)
@@ -1015,5 +1015,5 @@ func main() {
 	}
 
 	log.Printf("Server starting on port %s", port)
-	log.Fatal(http.ListenAndServe(":"+port, r))
+	log.Fatal(http.ListenAndServe(":"+port, router))
 }

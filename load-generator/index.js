@@ -4,7 +4,7 @@ const axios = require('axios');
 const faker = require('faker');
 
 // Configuration
-const config = {
+const loadTestConfig = {
   apiUrl: process.env.BACKEND_URL || 'http://127.0.0.1:8080',
   scenario: process.env.SCENARIO || 'normal',
   duration: parseInt(process.env.DURATION_MINUTES) || 60, // minutes
@@ -44,7 +44,7 @@ const scenarios = {
 };
 
 // Statistics tracking
-const stats = {
+const loadTestStats = {
   requests: {
     total: 0,
     successful: 0,
@@ -77,31 +77,31 @@ class LoadGenerator {
     this.scenario = scenarios[scenario] || scenarios.normal;
     this.running = false;
     this.workers = [];
-    this.doctors = [];
+    this.doctorsListList = [];
     
     console.log(`🚀 Starting ${this.scenario.name}`);
     console.log(`📊 ${this.scenario.description}`);
     console.log(`🎯 Target: ${this.scenario.requestsPerMinute} req/min with ${this.scenario.concurrent} concurrent users`);
-    console.log(`⏱️  Duration: ${config.duration} minutes`);
-    console.log(`🔗 API: ${config.apiUrl}`);
+    console.log(`⏱️  Duration: ${loadTestConfig.duration} minutes`);
+    console.log(`🔗 API: ${loadTestConfig.apiUrl}`);
   }
 
   async initialize() {
     try {
       // Test API connectivity
       console.log('🔍 Testing API connectivity...');
-      const healthResponse = await axios.get(`${config.apiUrl}/api/v1/health`, { timeout: 5000 });
+      const healthResponse = await axios.get(`${loadTestConfig.apiUrl}/api/v1/health`, { timeout: 5000 });
       console.log('✅ API is healthy');
 
       // Preload doctors list for realistic appointment booking
       console.log('👨‍⚕️ Loading doctors list...');
-      const doctorsResponse = await axios.get(`${config.apiUrl}/api/v1/doctors?limit=50`);
-      this.doctors = doctorsResponse.data || [];
-      console.log(`📋 Loaded ${this.doctors.length} doctors for appointment simulation`);
+      const doctorsResponse = await axios.get(`${loadTestConfig.apiUrl}/api/v1/doctors?limit=50`);
+      this.doctorsListList = doctorsResponse.data || [];
+      console.log(`📋 Loaded ${this.doctorsListList.length} doctors for appointment simulation`);
       
     } catch (error) {
       console.error('❌ Failed to initialize:', error.message);
-      console.error('💡 Make sure the API is running at:', config.apiUrl);
+      console.error('💡 Make sure the API is running at:', loadTestConfig.apiUrl);
       process.exit(1);
     }
   }
@@ -111,9 +111,9 @@ class LoadGenerator {
     const endpointKey = endpoint.replace(/\/\d+/, '/:id'); // Normalize URLs with IDs
     
     try {
-      stats.requests.total++;
-      stats.endpoints[endpointKey] = stats.endpoints[endpointKey] || { requests: 0, success: 0, avgTime: 0 };
-      stats.endpoints[endpointKey].requests++;
+      loadTestStats.requests.total++;
+      loadTestStats.endpoints[endpointKey] = loadTestStats.endpoints[endpointKey] || { requests: 0, success: 0, avgTime: 0 };
+      loadTestStats.endpoints[endpointKey].requests++;
 
       const config = {
         method,
@@ -131,15 +131,15 @@ class LoadGenerator {
       
       // Track success
       const responseTime = Date.now() - startTime;
-      stats.requests.successful++;
-      stats.endpoints[endpointKey].success++;
-      stats.responseTimes.push(responseTime);
+      loadTestStats.requests.successful++;
+      loadTestStats.endpoints[endpointKey].success++;
+      loadTestStats.responseTimes.push(responseTime);
       
       // Update average response time
-      const endpoint_stats = stats.endpoints[endpointKey];
+      const endpoint_stats = loadTestStats.endpoints[endpointKey];
       endpoint_stats.avgTime = (endpoint_stats.avgTime * (endpoint_stats.success - 1) + responseTime) / endpoint_stats.success;
 
-      if (config.logLevel === 'debug') {
+      if (loadTestConfig.logLevel === 'debug') {
         console.log(`✅ ${method} ${endpoint} - ${response.status} (${responseTime}ms)`);
       }
 
@@ -147,13 +147,13 @@ class LoadGenerator {
 
     } catch (error) {
       const responseTime = Date.now() - startTime;
-      stats.requests.failed++;
+      loadTestStats.requests.failed++;
       
       // Track error types
       const errorType = error.code || error.response?.status || 'unknown';
-      stats.requests.errors[errorType] = (stats.requests.errors[errorType] || 0) + 1;
+      loadTestStats.requests.errors[errorType] = (loadTestStats.requests.errors[errorType] || 0) + 1;
 
-      if (config.logLevel === 'debug' || config.logLevel === 'info') {
+      if (loadTestConfig.logLevel === 'debug' || loadTestConfig.logLevel === 'info') {
         console.log(`❌ ${method} ${endpoint} - Error: ${errorType} (${responseTime}ms)`);
       }
 
@@ -166,7 +166,7 @@ class LoadGenerator {
   }
 
   getRandomDoctor() {
-    return this.doctors[Math.floor(Math.random() * this.doctors.length)];
+    return this.doctorsList[Math.floor(Math.random() * this.doctorsList.length)];
   }
 
   generateAppointmentData() {
@@ -204,7 +204,7 @@ class LoadGenerator {
     }
 
     // 3. View specific doctor details (40% of sessions)
-    if (Math.random() < 0.4 && this.doctors.length > 0) {
+    if (Math.random() < 0.4 && this.doctorsList.length > 0) {
       const doctor = this.getRandomDoctor();
       sessionActions.push(() => this.makeRequest(`/api/v1/doctors/${doctor.id}`));
     }
@@ -246,12 +246,12 @@ class LoadGenerator {
   }
 
   printStats() {
-    const runtime = (Date.now() - stats.startTime) / 1000 / 60; // minutes
-    const requestRate = stats.requests.total / runtime;
-    const successRate = (stats.requests.successful / stats.requests.total * 100).toFixed(1);
+    const runtime = (Date.now() - loadTestStats.startTime) / 1000 / 60; // minutes
+    const requestRate = loadTestStats.requests.total / runtime;
+    const successRate = (loadTestStats.requests.successful / loadTestStats.requests.total * 100).toFixed(1);
     
     // Calculate percentiles
-    const sortedTimes = stats.responseTimes.sort((a, b) => a - b);
+    const sortedTimes = loadTestStats.responseTimes.sort((a, b) => a - b);
     const p50 = sortedTimes[Math.floor(sortedTimes.length * 0.5)] || 0;
     const p95 = sortedTimes[Math.floor(sortedTimes.length * 0.95)] || 0;
     const p99 = sortedTimes[Math.floor(sortedTimes.length * 0.99)] || 0;
@@ -261,24 +261,24 @@ class LoadGenerator {
     console.log('='.repeat(50));
     console.log(`⏱️  Runtime: ${runtime.toFixed(1)} minutes`);
     console.log(`📈 Request Rate: ${requestRate.toFixed(1)} req/min`);
-    console.log(`✅ Success Rate: ${successRate}% (${stats.requests.successful}/${stats.requests.total})`);
-    console.log(`❌ Failed Requests: ${stats.requests.failed}`);
+    console.log(`✅ Success Rate: ${successRate}% (${loadTestStats.requests.successful}/${loadTestStats.requests.total})`);
+    console.log(`❌ Failed Requests: ${loadTestStats.requests.failed}`);
     
     console.log('\n🚀 RESPONSE TIMES:');
     console.log(`Average: ${avgTime.toFixed(0)}ms`);
     console.log(`P50: ${p50}ms | P95: ${p95}ms | P99: ${p99}ms`);
     
     console.log('\n🎯 ENDPOINT BREAKDOWN:');
-    Object.entries(stats.endpoints).forEach(([endpoint, stat]) => {
+    Object.entries(loadTestStats.endpoints).forEach(([endpoint, stat]) => {
       if (stat.requests > 0) {
         const successRate = (stat.success / stat.requests * 100).toFixed(1);
         console.log(`${endpoint}: ${stat.requests} req, ${successRate}% success, ${stat.avgTime.toFixed(0)}ms avg`);
       }
     });
 
-    if (Object.keys(stats.requests.errors).length > 0) {
+    if (Object.keys(loadTestStats.requests.errors).length > 0) {
       console.log('\n⚠️  ERROR BREAKDOWN:');
-      Object.entries(stats.requests.errors).forEach(([error, count]) => {
+      Object.entries(loadTestStats.requests.errors).forEach(([error, count]) => {
         console.log(`${error}: ${count} occurrences`);
       });
     }
@@ -298,7 +298,7 @@ class LoadGenerator {
       this.workers.push(this.startWorker(i + 1));
     }
 
-    // Print stats every 30 seconds
+    // Print loadTestStats every 30 seconds
     const statsInterval = setInterval(() => {
       if (this.running) {
         this.printStats();
@@ -310,7 +310,7 @@ class LoadGenerator {
     // Stop after configured duration
     setTimeout(() => {
       this.stop();
-    }, config.duration * 60 * 1000);
+    }, loadTestConfig.duration * 60 * 1000);
   }
 
   stop() {

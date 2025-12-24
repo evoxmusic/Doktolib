@@ -81,7 +81,7 @@ function generateAppointments(doctors, count = 200) {
   const statuses = ['confirmed', 'completed', 'cancelled'];
   const durations = [30, 60];
   
-  for (let i = 0; i < count; i++) {
+  for (let appointmentIndex = 0; appointmentIndex < count; appointmentIndex++) {
     const doctor = doctors[Math.floor(Math.random() * doctors.length)];
     const patientName = patientNames[Math.floor(Math.random() * patientNames.length)];
     
@@ -90,12 +90,12 @@ function generateAppointments(doctors, count = 200) {
     let daysOffset;
     let status;
     
-    const rand = Math.random();
-    if (rand < 0.3) {
+    const randomValue = Math.random();
+    if (randomValue < 0.3) {
       // Past appointments (-30 to -1 days)
       daysOffset = Math.floor(Math.random() * 30) * -1 - 1;
       status = Math.random() > 0.2 ? 'completed' : 'cancelled'; // 80% completed, 20% cancelled
-    } else if (rand < 0.4) {
+    } else if (randomValue < 0.4) {
       // Today's appointments
       daysOffset = 0;
       status = 'confirmed';
@@ -127,7 +127,7 @@ function generatePrescriptions(appointments, prescriptionRate = 0.6) {
   const prescriptions = [];
   
   // Only generate prescriptions for completed appointments that have an ID (inserted)
-  const completedAppointments = appointments.filter(apt => apt.status === 'completed' && apt.id);
+  const completedAppointments = appointments.filter(appointment => appointment.status === 'completed' && appointment.id);
   
   for (const appointment of completedAppointments) {
     // Generate prescription based on rate (60% of completed appointments get prescriptions)
@@ -171,8 +171,8 @@ if (require.main === module) {
   const appointments = generateAppointments(mockDoctors, 10);
   console.log(`Generated ${appointments.length} appointments:`);
   
-  appointments.forEach((apt, i) => {
-    console.log(`${i + 1}. ${apt.patient_name} with ${mockDoctors.find(d => d.id === apt.doctor_id)?.name} on ${apt.date_time.toISOString()} (${apt.status})`);
+  appointments.forEach((appointment, appointmentIndex) => {
+    console.log(`${appointmentIndex + 1}. ${appointment.patient_name} with ${mockDoctors.find(doctor => doctor.id === appointment.doctor_id)?.name} on ${appointment.date_time.toISOString()} (${appointment.status})`);
   });
   
   const prescriptions = generatePrescriptions(appointments);

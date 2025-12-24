@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 
 // English names and medical specialties
-const firstNames = {
+const firstNamesByGender = {
   male: [
     'James', 'Robert', 'John', 'Michael', 'David', 'William', 'Richard', 'Thomas', 'Christopher', 'Charles',
     'Daniel', 'Matthew', 'Anthony', 'Mark', 'Donald', 'Steven', 'Paul', 'Andrew', 'Joshua', 'Kenneth',
@@ -91,10 +91,10 @@ function getRandomFloat(min, max, decimals = 1) {
   return +(Math.random() * (max - min) + min).toFixed(decimals);
 }
 
-function generateDoctor(id) {
+function generateDoctor(doctorIndex) {
   const isWoman = Math.random() > 0.4; // 60% women, 40% men (realistic for medical field)
   const gender = isWoman ? 'female' : 'male';
-  const firstName = getRandomElement(firstNames[gender]);
+  const firstName = getRandomElement(firstNamesByGender[gender]);
   const lastName = getRandomElement(lastNames);
   const specialty = getRandomElement(specialties);
   const location = getRandomElement(usaCities);
@@ -117,7 +117,7 @@ function generateDoctor(id) {
   const avatar = getRandomElement(avatarUrls);
   
   return {
-    id: id,
+    id: doctorIndex,
     name: `Dr. ${firstName} ${lastName}`,
     specialty: specialty,
     location: location,
@@ -133,11 +133,11 @@ function generateDoctors(count) {
   console.log(`Generating ${count} doctors...`);
   const doctors = [];
   
-  for (let i = 1; i <= count; i++) {
-    doctors.push(generateDoctor(i));
+  for (let doctorIndex = 1; doctorIndex <= count; doctorIndex++) {
+    doctors.push(generateDoctor(doctorIndex));
     
-    if (i % 100 === 0) {
-      console.log(`Generated ${i}/${count} doctors...`);
+    if (doctorIndex % 100 === 0) {
+      console.log(`Generated ${doctorIndex}/${count} doctors...`);
     }
   }
   
@@ -160,10 +160,10 @@ BEGIN;
 
   // Split into batches of 100 for better performance
   const batchSize = 100;
-  for (let i = 0; i < doctors.length; i += batchSize) {
-    const batch = doctors.slice(i, i + batchSize);
+  for (let batchIndex = 0; batchIndex < doctors.length; batchIndex += batchSize) {
+    const batch = doctors.slice(batchIndex, batchIndex + batchSize);
     
-    sql += `\n-- Batch ${Math.floor(i / batchSize) + 1}\n`;
+    sql += `\n-- Batch ${Math.floor(batchIndex / batchSize) + 1}\n`;
     sql += 'INSERT INTO doctors (name, specialty, location, rating, price_per_hour, avatar, experience_years, languages) VALUES\n';
     
     const values = batch.map(doctor => 
